@@ -1,0 +1,614 @@
+---
+title: "INFANT MORTALITY"
+format: dashboard
+theme: journal
+---
+
+```{python}
+## Loading libraries
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import country_converter as coco
+import statsmodels.api as sm
+import itables
+
+## Datasets
+infant_deaths = pd.read_csv("data/infant_deaths.csv")
+imr = pd.read_csv("data/infant_mortality_rate.csv")
+male_imr = pd.read_csv("data/infant_mortality_rate_m.csv")
+female_imr = pd.read_csv("data/infant_mortality_rate_f.csv")
+vaccination_rate = pd.read_csv("data/vacc_rate.csv")
+
+## restricting analyses to 2013-2023
+infant_deaths_sub = infant_deaths[
+    [
+        "country",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+    ]
+]
+imr_sub = imr[
+    [
+        "country",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+    ]
+]
+male_imr_sub = male_imr[
+    [
+        "country",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+    ]
+]
+female_imr_sub = female_imr[
+    [
+        "country",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+    ]
+]
+vaccination_rate_sub = vaccination_rate[
+    [
+        "country",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+    ]
+]
+
+
+## converting annual number of deaths to integers
+def value_to_int(value):
+    if type(value) == float or type(value) == int:
+        return value
+    if "k" in value:
+        return float(value.replace("k", "")) * 1000
+    if "K" in value:
+        return float(value.replace("K", "")) * 1000
+    if "M" in value:
+        return float(value.replace("M", "")) * 1000000
+    if "m" in value:
+        return float(value.replace("m", "")) * 1000000
+    else:
+        return value
+
+
+infant_deaths_sub["2013"] = infant_deaths_sub["2013"].apply(value_to_int)
+infant_deaths_sub["2014"] = infant_deaths_sub["2014"].apply(value_to_int)
+infant_deaths_sub["2015"] = infant_deaths_sub["2015"].apply(value_to_int)
+infant_deaths_sub["2016"] = infant_deaths_sub["2016"].apply(value_to_int)
+infant_deaths_sub["2017"] = infant_deaths_sub["2017"].apply(value_to_int)
+infant_deaths_sub["2018"] = infant_deaths_sub["2018"].apply(value_to_int)
+infant_deaths_sub["2019"] = infant_deaths_sub["2019"].apply(value_to_int)
+infant_deaths_sub["2020"] = infant_deaths_sub["2020"].apply(value_to_int)
+infant_deaths_sub["2021"] = infant_deaths_sub["2021"].apply(value_to_int)
+infant_deaths_sub["2022"] = infant_deaths_sub["2022"].apply(value_to_int)
+infant_deaths_sub["2023"] = infant_deaths_sub["2023"].apply(value_to_int)
+
+##  reshaping all datasets to long format
+infant_deaths_sub_long = infant_deaths_sub.melt(
+    id_vars="country", var_name="year", value_name="num_deaths"
+).sort_values(["country", "year"])
+infant_deaths_sub_long["year"] = infant_deaths_sub_long["year"].astype(int)
+infant_deaths_sub_long["num_deaths"] = infant_deaths_sub_long["num_deaths"].astype(int)
+
+imr_sub_long = imr_sub.melt(
+    id_vars="country", var_name="year", value_name="imr"
+).sort_values(["country", "year"])
+imr_sub_long["year"] = imr_sub_long["year"].astype(int)
+
+male_imr_sub_long = male_imr_sub.melt(
+    id_vars="country", var_name="year", value_name="imr"
+).sort_values(["country", "year"])
+male_imr_sub_long["year"] = male_imr_sub_long["year"].astype(int)
+
+female_imr_sub_long = female_imr_sub.melt(
+    id_vars="country", var_name="year", value_name="imr"
+).sort_values(["country", "year"])
+female_imr_sub_long["year"] = female_imr_sub_long["year"].astype(int)
+
+vaccination_rate_sub_long = vaccination_rate_sub.melt(
+    id_vars="country", var_name="year", value_name="vacc_rate"
+).sort_values(["country", "year"])
+vaccination_rate_sub_long["year"] = vaccination_rate_sub_long["year"].astype(int)
+
+## adding county codes and continents to all datasets
+
+# infant deaths data
+infant_deaths_sub_long["country"] = infant_deaths_sub_long["country"].replace(
+    {"UAE": "ARE"}  # official letter code for UAE
+)
+infant_deaths_sub_long["country_code"] = coco.convert(
+    names=infant_deaths_sub_long["country"], to="ISO3"
+)
+infant_deaths_sub_long["continent"] = coco.convert(
+    names=infant_deaths_sub_long["country"], to="continent"
+)
+
+# imr data
+imr_sub_long["country"] = imr_sub_long["country"].replace({"UAE": "ARE"})
+imr_sub_long["country_code"] = coco.convert(names=imr_sub_long["country"], to="ISO3")
+imr_sub_long["continent"] = coco.convert(names=imr_sub_long["country"], to="continent")
+
+# imr male's data
+male_imr_sub_long["country"] = male_imr_sub_long["country"].replace({"UAE": "ARE"})
+male_imr_sub_long["country_code"] = coco.convert(
+    names=male_imr_sub_long["country"], to="ISO3"
+)
+male_imr_sub_long["continent"] = coco.convert(
+    names=male_imr_sub_long["country"], to="continent"
+)
+
+# imr female's data
+female_imr_sub_long["country"] = female_imr_sub_long["country"].replace({"UAE": "ARE"})
+female_imr_sub_long["country_code"] = coco.convert(
+    names=female_imr_sub_long["country"], to="ISO3"
+)
+female_imr_sub_long["continent"] = coco.convert(
+    names=female_imr_sub_long["country"], to="continent"
+)
+
+# combining male's and female's datasets
+male_imr_sub_long["sex"] = "male"
+female_imr_sub_long["sex"] = "female"
+imr_combined = pd.concat([male_imr_sub_long, female_imr_sub_long], ignore_index=True)
+
+# vaccination rate data
+vaccination_rate_sub_long["country"] = vaccination_rate_sub_long["country"].replace(
+    {"UAE": "ARE"}
+)
+vaccination_rate_sub_long["country_code"] = coco.convert(
+    names=vaccination_rate_sub_long["country"], to="ISO3"
+)
+vaccination_rate_sub_long["continent"] = coco.convert(
+    names=vaccination_rate_sub_long["country"], to="continent"
+)
+
+# highest infant mortality rate
+highest_imr = (
+    imr_sub_long.query("year == 2023")
+    .sort_values("imr", ascending=False)
+    .head(1)
+    .squeeze()
+)
+highest_imr_country = highest_imr["country"]
+highest_imr_value = highest_imr["imr"]
+
+# lowest infant mortality rate
+lowest_imr = (
+    imr_sub_long.query("year == 2023")
+    .sort_values("imr", ascending=True)
+    .head(1)
+    .squeeze()
+)
+lowest_imr_country = lowest_imr["country"]
+lowest_imr_value = lowest_imr["imr"]
+
+# median infant mortality rate
+median_imr = imr_sub_long.query("year == 2023")["imr"].median()
+
+# global imr in 2023
+imr_map = px.choropleth(
+    imr_sub_long.query("year == 2023"),
+    locations="country_code",
+    color="imr",
+    hover_name="country",
+    title="Map of Countries by Infant Mortality Rate",
+    color_continuous_scale="Reds",
+).update_layout(coloraxis_showscale=True)
+
+# imr regional summary
+imr_reg_sum = (
+    imr_sub_long.query("year == 2023")
+    .groupby("continent")
+    .apply(
+        lambda g: pd.Series(
+            {
+                "Median IMR": g["imr"].median(),
+                "Lowest IMR": g["imr"].min(),
+                "Country with Lowest IMR": g.loc[g["imr"].idxmin(), "country"],
+                "Highest IMR": g["imr"].max(),
+                "Country with Highest IMR": g.loc[g["imr"].idxmax(), "country"],
+            }
+        )
+    )
+    .round(1)
+)
+
+# imr across continents
+imr_continent_fig = px.box(
+    imr_sub_long.query("year == 2023"),
+    x="continent",
+    y="imr",
+    color="continent",
+    title="Distribution of IMR by Continent",
+    points="all",  # This shows all data points
+    hover_data=["country"],  # This adds country names to hover info
+    color_discrete_sequence=px.colors.sequential.Sunsetdark_r,  # Built-in Reds palette
+).update_layout(
+    showlegend=False, xaxis_title="Continent", yaxis_title="Infant Mortality Rate"
+)
+
+# trend in Uganda's imr over the years
+imr_trend_ug = (
+    px.line(
+        imr_sub_long.query("country == 'Uganda'"),
+        x="year",
+        y="imr",
+        markers=True,
+        labels={"year": "Year", "imr": "Infant Mortality Rate"},
+        title="Uganda's Infant Mortality Rate between 2013-2023",
+    )
+    .update_traces(line_color="#FF4B33")
+    .update_xaxes(dtick=1, showgrid=False)
+    .update_yaxes(showgrid=False)
+)
+
+# trend of imr by gender
+imr_gender_line = (
+    px.line(
+        imr_combined.query("country == 'Uganda'"),
+        x="year",
+        y="imr",
+        markers=True,
+        color="sex",
+        color_discrete_sequence=["#FF4B33", "gold"],
+        labels={"year": "Year", "imr": "Infant Mortality Rate", "sex": "Gender"},
+        title="Uganda's Infant Mortality Rate by Gender",
+    )
+    .update_xaxes(dtick=1, showgrid=False)
+    .update_yaxes(showgrid=False)
+)
+
+# Uganda's imr by gender 2023
+imr_gender_bar = (
+    px.histogram(
+        imr_combined.query("year == 2023 & country == 'Uganda'"),
+        y="imr",
+        x="sex",
+        color="sex",
+        text_auto=True,
+        labels={"imr": "Infant Mortality Rate", "sex": "Gender"},
+        color_discrete_sequence=["lightseagreen", "gold"],
+        title="Uganda's Infant Mortality Rate in 2023 by Gender",
+    )
+    .update_xaxes(dtick=1, showgrid=False)
+    .update_yaxes(showgrid=False)
+)
+
+# highest vaccination rate
+highest_vacc_rate = (
+    vaccination_rate_sub_long.query("year == 2023")
+    .sort_values("vacc_rate", ascending=False)
+    .head(1)
+    .squeeze()
+)
+highest_vacc_rate_imr_country = highest_vacc_rate["country"]
+highest_vacc_rate_value = highest_vacc_rate["vacc_rate"]
+
+# lowest vaccination rate
+lowest_vacc_rate = (
+    vaccination_rate_sub_long.query("year == 2023")
+    .sort_values("vacc_rate", ascending=True)
+    .head(1)
+    .squeeze()
+)
+lowest_vacc_rate_imr_country = lowest_vacc_rate["country"]
+lowest_vacc_rate_value = lowest_vacc_rate["vacc_rate"]
+
+# median vaccination rate
+median_vacc = vaccination_rate_sub_long.query("year == 2023")["vacc_rate"].median()
+
+# global vaccination rate in 2023
+vacc_map = px.choropleth(
+    vaccination_rate_sub_long.query("year == 2023"),
+    locations="country_code",
+    color="vacc_rate",
+    hover_name="country",
+    title="Map of Countries by Vaccination Rate",
+    color_continuous_scale="Reds_r",
+).update_layout(coloraxis_showscale=True)
+
+# vaccination rate regional summary
+vacc_reg_sum = (
+    vaccination_rate_sub_long.query("year == 2023")
+    .groupby("continent")
+    .apply(
+        lambda g: pd.Series(
+            {
+                "Median Vaccination Rate": g["vacc_rate"].median(),
+                "Lowest Vaccination Rate": g["vacc_rate"].min(),
+                "Country with Lowest Vaccination Rate": g.loc[
+                    g["vacc_rate"].idxmin(), "country"
+                ],
+                "Highest Vaccination Rate": g["vacc_rate"].max(),
+                "Country with Highest Vaccination Rate": g.loc[
+                    g["vacc_rate"].idxmax(), "country"
+                ],
+            }
+        )
+    )
+    .round(1)
+)
+
+# vaccination rates across continents
+vacc_continent_fig = px.box(
+    vaccination_rate_sub_long.query("year == 2023"),
+    x="continent",
+    y="vacc_rate",
+    color="continent",
+    title="Distribution of Vaccination Rates by Continent",
+    points="all",  # This shows all data points
+    hover_data=["country"],  # This adds country names to hover info
+    color_discrete_sequence=px.colors.sequential.Sunsetdark_r,  # Built-in Reds palette
+).update_layout(
+    showlegend=False, xaxis_title="Continent", yaxis_title="Vaccination Rate"
+)
+
+# trend in Uganda's vaccination rate over the years
+vacc_trend_ug = (
+    px.line(
+        vaccination_rate_sub_long.query("country == 'Uganda'"),
+        x="year",
+        y="vacc_rate",
+        markers=True,
+        labels={"year": "Year", "vacc_rate": "Vaccination Rate"},
+        title="Uganda's Vaccination Rate between 2013-2023",
+        color_discrete_map={"imr": "orange"},
+    )
+    .update_traces(line_color="#FF4B33")
+    .update_xaxes(dtick=1, showgrid=False)
+    .update_yaxes(showgrid=False)
+)
+
+# scatter plot showing the relationship between vaccination rates and infant mortality rate in 2023, case study of Uganda
+combined_data = pd.merge(
+    imr_sub_long,
+    vaccination_rate_sub_long,
+    how="left",
+    on=["country", "country_code", "continent", "year"],
+)
+
+scatter_ug = (
+    px.scatter(
+        combined_data.query("country == 'Uganda'"),
+        x="vacc_rate",
+        y="imr",
+        trendline="ols",
+        labels={
+            "year": "Year",
+            "vacc_rate": "Vaccination Rate",
+            "imr": "Infant Mortality Rate",
+        },
+        title="IMR and Vaccination Rate in Uganda(2013-2023)",
+    )
+    .update_xaxes(dtick=1, showgrid=False)
+    .update_yaxes(dtick=2, showgrid=False)
+)    
+```
+
+# IMR
+
+## Row 1 {height=30%}
+
+::: {.valuebox icon="thermometer-high" color="#E2725B" title="Highest Infant Mortality Rate"}
+
+`{python} str(highest_imr_value)`
+
+`{python} highest_imr_country`
+
+:::
+
+::: {.valuebox icon="thermometer-low" color="#EABD8C" title="Lowest Infant Mortality Rate"} 
+
+`{python} str(lowest_imr_value)`
+
+`{python} lowest_imr_country`
+
+:::
+
+::: {.valuebox icon="graph-down" color="#FF9913" title="Median Infant Mortality Rate"}
+
+`{python} str(median_imr)`
+
+:::
+
+## Row 2 {height=70%}
+
+### {.tabset width=60%}
+
+#### Map
+
+```{python}
+imr_map
+```
+
+#### Summary
+Sub-Saharan Africa has the highest infant mortality rate with nearly all countries having a rate above 30 infant deaths per 1000 livebirths, while North Ameica and Europe had the least rates with nearly all countries having rates below 5 infant deaths per 1000 live births.
+
+### {.tabset width=40%}
+
+#### Plot
+
+```{python}
+imr_continent_fig
+```
+
+#### Summary
+
+Afica has the widest variation in infant mortality rates, ranging from 9.4 in Sao Tome and Principe to 72.6 in South Sudan, and highest median of 37.05 deaths per 1000 live births, compared to the rest of the world. In contrast, Europe had the least variance and lowest median of 3 deaths per 1000 live births.
+
+
+# IMR - REGIONAL
+
+## Row 1 {height=40%}
+
+```{python}
+itables.show(imr_reg_sum)
+```
+
+## Row 2 {height=60%}
+
+### {.tabset width=50%}
+
+#### Plot
+
+```{python}
+imr_trend_ug
+```
+
+#### Summary 
+The infant mortality rate in Uganda consistently decresed from 42.2 to 27.6 deaths per 1000 live births between 2013-2023.  
+
+
+### {.tabset width=50%}
+
+#### Plot
+
+```{python}
+imr_gender_line
+```
+
+#### Summary 
+Between 2013-2023, the decline in infant mortality was consistently disproportionately greater among boys compared to girls.
+
+# VACCINATION RATE
+
+## Row 1 {height=30%}
+
+::: {.valuebox icon="thermometer-high" color="#EABD8C" title="Highest Vaccination Rate"}
+
+`{python} str(highest_vacc_rate_value)`
+
+`{python} highest_vacc_rate_imr_country`
+
+:::
+
+::: {.valuebox icon="thermometer-low" color="#E2725B" title="Lowest Vaccination Rate"} 
+
+`{python} str(lowest_vacc_rate_value)`
+
+`{python} lowest_vacc_rate_imr_country`
+
+:::
+
+::: {.valuebox icon="graph-up" color="#FF9913" title="Median Vaccination Rate"}
+
+`{python} str(median_vacc)`
+
+:::
+
+## Row 2 {height=70%}
+
+### {.tabset width=50%}
+
+#### Plot
+
+```{python}
+vacc_map
+```
+
+#### Summary 
+
+Sub-Saharan Africa has the hihest number of countries where less than 70% of one year olds are vaccinated against the following six vaccines: Bacile Calmette-Guerin (BCG), Diptheria tetanus and pertussis (DPT3), Hepatitis B(HepB3), Haemophilus influenza type B(HIB3), Measles 1st dose (MCV1), and Polio (Pol3). Data on this indicator is unavailable for 31 countries across North America, Europe, and Oceania.
+
+
+### {.tabset width=50%}
+
+#### Plot
+
+```{python}
+vacc_continent_fig
+```
+
+#### Summary 
+
+Africa has the highest variation in vaccination rates ranging from 47% in Somalia to 99% in Morocco, Algeria and Seychelles. In Oceania, 99% of one year olds are vaccinated against the 6 aforementioned diseases.
+
+
+# VACCINATION RATE & IMR - REGIONAL
+
+## Row 1 {height=40%}
+
+```{python}
+itables.show(vacc_reg_sum)
+```
+
+## Row 2 {height=60%}
+
+### {.tabset width=50%}
+
+#### Plot
+
+```{python}
+vacc_trend_ug
+```
+
+#### Summary 
+
+The vaccination rate in Uganda fluctuated between 2013 and 2023. Besides the decline between 2019-2020 due to the Covid-19 pandemic, other declines could be attributed to supply stock-outs. 
+
+### {.tabset width=50%}
+
+#### Plot
+
+```{python}
+scatter_ug
+```
+
+#### Summary 
+
+The consistent decline in infant mortality rate could be attributed to other healthcare interventions besides vaccination as the downward trend continues despite fluctuations in vaccination rate.
+
+# DATA DOWNLOAD
+
+```{python}
+# Display full dataset with itables
+itables.show(combined_data, caption="Gapminder Dataset (2013-2023)", buttons=["csvHtml5"])
+```
